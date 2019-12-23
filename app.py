@@ -3,12 +3,13 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import uuid 
 import jwt
+import datetime
 from functools import wraps
 
 app = Flask(__name__) 
 
 app.config['SECRET_KEY']='Th1s1ss3cr3t'
-app.config['SQLALCHEMY_DATABASE_URI']='postgresql://postgres:geektuts@localhost/library' 
+app.config['SQLALCHEMY_DATABASE_URI']='sqlite://///home/michael/geekdemos/geekapp/library.db' 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True 
 
 db = SQLAlchemy(app)   
@@ -56,17 +57,17 @@ def token_required(f):
 
         
 
-@app.route('/user', methods=['GET', 'POST'])
+@app.route('/register', methods=['GET', 'POST'])
 def signup_user():  
  data = request.get_json()  
 
- hashed_password = generate_hash_password(data['password'], method='sha256')
+ hashed_password = generate_password_hash(data['password'], method='sha256')
  
- new_user = User(public_id=str(uuid.uuid4()), name=data['name'], password=hashed_password, admin=False) 
+ new_user = Users(public_id=str(uuid.uuid4()), name=data['name'], password=hashed_password, admin=False) 
  db.session.add(new_user)  
  db.session.commit()    
 
- return jsonify({'message': 'signup successfully'})   
+ return jsonify({'message': 'registered successfully'})   
 
 
 @app.route('/login', methods=['GET', 'POST'])  
@@ -74,10 +75,10 @@ def login_user():
  
   auth = request.authorization   
 
-  if not auth or not auth.name or not auth.password:  
+  if not auth or not auth.username or not auth.password:  
      return make_response('could not verify', 401, {'WWW.Authentication': 'Basic realm: "login required"'})    
 
-  user = Users.query.filter_by(name=auth.name).first()   
+  user = Users.query.filter_by(name=auth.username).first()   
      
   if check_password_hash(user.password, auth.password):  
      token = jwt.encode({'public_id': user.public_id, 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=30)}, app.config['SECRET_KEY'])  
@@ -89,7 +90,7 @@ def login_user():
 @app.route('/user', methods=['GET'])
 def get_all_users():  
    
-   users = user.query.all() 
+   users = Users.query.all() 
 
    result = []   
 
@@ -107,7 +108,7 @@ def get_all_users():
 
 @app.route('/authors', methods=['GET', 'POST']) 
 @token_required 
-def get_authors(current_user):  
+def get_authors(current_user, public_id):  
 
      authors = Authors.query.all()   
 
@@ -131,7 +132,7 @@ def create_author(current_user):
    
    data = request.get_json() 
 
-   new_authors = Authors(name=data['name'], country=data['country'], book=data['book'], booker_prize=data['booker_prize'], user=current_user.id)  
+   new_authors = Authors(name=data['name'], country=data['country'], book=data['book'], booker_prize=True, user_id=current_user.id)  
    db.session.add(new_authors)   
    db.session.commit()   
 
@@ -140,10 +141,10 @@ def create_author(current_user):
   
 
 
-@app.route('/authors', methods=['DELETE'])
+@app.route('/authors/<name>', methods=['DELETE'])
 @token_required
-def delete_author(current_user, author_id):  
-    author = Author.query.filter_by(author_id=author_id, user_id=current_user.id).first()   
+def delete_author(current_user, name):  
+    author = Author.query.filter_by(name=name, user_id=current_user.id).first()   
     if not author:   
        return jsonify({'message': 'author does not exist'})   
 
@@ -155,4 +156,4 @@ def delete_author(current_user, author_id):
 
 
 if  __name__ == '__main__':  
-    app.run(debug=True)   
+     app.run(debug=True) 
